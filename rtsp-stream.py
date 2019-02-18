@@ -52,7 +52,6 @@ ap.add_argument("-ic", "--img.chan", default=3,
 
 args = vars(ap.parse_args())
 
-imgdim = (int(args["img.height"]), int(args["img.width"]), int(args["img.chan"]))
 model, classes, graph, sess = hv.loadModel(args["model.path"], args["model.loss"])
 
 print("Loaded Classes...")
@@ -72,19 +71,21 @@ frame_grabber = None
 GObject.threads_init()
 Gst.init(None)
 
+faceCascade = cv2.CascadeClassifier("./cascades/haarcascade_frontalface_default.xml")
+
 def classifyImage(img):
         
-    begin = time.time()
+    #begin = time.time()
     with graph.as_default():
             with sess.as_default():
                 predictions = model.predict(img)
-    end = time.time()
-    max_score_index = np.argmax(predictions[0])
-    print("Took {} s, class and confidence are [{}] [{}] ".format(end-begin, classes[max_score_index], predictions[0][max_score_index]))
+    #end = time.time()
+    #max_score_index = np.argmax(predictions[0])
+    #print("Took {} s, class and confidence are [{}] [{}] ".format(end-begin, classes[max_score_index], predictions[0][max_score_index]))
 
-    for i in range(0, len(classes)):
-        print("[{}] [{}]".format(classes[i], predictions[0][i]))
-
+    #for i in range(0, len(classes)):
+        #print("[{}] [{}]".format(classes[i], predictions[0][i]))
+    return predictions
 
 class MainPipeline():
     def __init__(self):
@@ -161,7 +162,7 @@ class MainPipeline():
         print("Initializing GST Elements")
 
         #lg
-        CLI='rtspsrc location=rtsp://192.168.230.106:5554/camera latency=0 ! rtph264depay ! avdec_h264 ! videorate max-rate=15 ! decodebin ! queue max-size-buffers=10 ! jpegenc quality=25 ! jpegparse ! appsink name=sink'
+        CLI='rtspsrc location=rtsp://192.168.230.103:5554/camera latency=0 ! rtph264depay ! avdec_h264 ! videorate max-rate=5 ! decodebin ! queue max-size-buffers=10 ! jpegenc quality=25 ! jpegparse ! appsink name=sink'
 
         #bbb
         #CLI='rtspsrc location=rtsp://184.72.239.149/vod/mp4:BigBuckBunny_115k.mov latency=0 ! rtph264depay ! avdec_h264 ! videorate max-rate=15 ! decodebin ! queue max-size-buffers=10 ! jpegenc quality=25 ! jpegparse ! appsink name=sink'
@@ -227,12 +228,39 @@ def showFrames():
             print("q size[{}]".format(len(queued_frames)))
             #queued_frames.pop()
             arr,img = queued_frames.pop()
-            #print("{}".format(img.size))
-            x = image.img_to_array(img.resize((128,128))).astype(np.uint8)
-            x = np.expand_dims(x,axis=0)
-            x = x / 255
+            gray = arr.copy()
+            
+            faces = faceCascade.detectMultiScale(
+                gray,
+                scaleFactor=1.1,
+                minNeighbors=5,
+                minSize=(30, 30),
+                flags = cv2.CASCADE_SCALE_IMAGE
+            )
 
-            classifyImage(x)
+            if len(faces) == 1:
+                x,y,w,h = faces[0]
+                faceImage = gray[y:y+h, x:x+w]
+                faceImage = cv2.resize(faceImage, (int(args['img.width']),int(args['img.height'])))
+                
+                classfication_x = image.img_to_array(faceImage).astype(np.uint8)
+
+                classfication_x = np.expand_dims(classfication_x,axis=0)
+                classfication_x = classfication_x / 255
+
+                predictions = classifyImage(classfication_x)
+                max_score_index = np.argmax(predictions[0])
+                #print("Took {} s, class and confidence are [{}] [{}] ".format(end-begin, classes[max_score_index], predictions[0][max_score_index]))
+                msg = "{} - {}".format(classes[max_score_index], round(100.0*float(predictions[0][max_score_index])))
+                
+                cv2.rectangle(arr, (x, y), (x+w, y+h), (0, 255, 0), 2)
+                cv2.putText(arr,
+                    msg, 
+                    (x+int(w/2),y+h-20), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 
+                    1,
+                    (0,0,0),
+                    2)
 
             cv2.imshow("preview", arr)
             cv2.waitKey(1)

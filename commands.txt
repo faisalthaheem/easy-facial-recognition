@@ -1,23 +1,25 @@
--- extract images from video at 30fps
-ffmpeg -i s2.mp4 -s 128x128 -r 30/1 s2-%05d.jpg
+-- extract images from video at 30fps 1920x1080 (hxw)
+ffmpeg -i s2.mp4 -s 480*640 -r 30/1 s2-%05d.jpg
 
 -- convert extracted frames to grayscale
 python3 conv2gs.py -sd ./data/faisal -bd ./baddata/
 
--- train on 128 x 128 images
+-- extract faces from frames and conver to grayscale
+python3 extract-faces.py -sd data/faisal/ -bd baddata/ -ih 256 -iw 256
+
+-- train on 256 x 256 images
 python3 train-cnn.py \
 -dp ./data \
--dl ./models/model.h5 \
--iw 128 \
--ih 128 \
+-dl ./models/sfr \
+-iw 256 \
+-ih 256 \
 -ic 1 \
 -mb 24
 
-
 -- visual classify - make sure xserver is mapped
-python3 visualclassify.py -mp ./models/model.h5 -ml categorical_crossentropy -iw 128 -ih 128 -ic 1
+python3 visualclassify.py -mp ./models/sfr -ml categorical_crossentropy -iw 256 -ih 256 -ic 1
 
 python3 rtsp-stream.py \
--mp ./models/model.h5 \
+-mp ./models/sfr \
 -ml categorical_crossentropy \
--iw 128 -ih 128 -ic 1
+-iw 256 -ih 256 -ic 1
