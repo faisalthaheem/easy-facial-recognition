@@ -1,4 +1,5 @@
 #!/bin/sh
+xhost local:root
 docker run -it \
 --runtime=nvidia \
 --name tf13 \
